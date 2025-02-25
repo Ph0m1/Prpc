@@ -1,4 +1,4 @@
-package prpc
+package logger
 
 import (
 	"log"

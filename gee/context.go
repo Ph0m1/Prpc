@@ -1,7 +1,9 @@
 package gee
 
 import (
+	"encoding/json"
 	"fmt"
+	"logger"
 	"net/http"
 )
 
@@ -53,21 +55,30 @@ func (c *Context) String(code int, format string, values ...interface{}) {
 	c.SetHeader(ContentType, "text/plain")
 	c.SetStatusCode(code)
 	if _, err := c.Writer.Write([]byte(fmt.Sprintf(format, values))); err != nil {
-
+		logger.INFO("set string return type error(context set return value):", err)
 	}
 }
 
 func (c *Context) HTML(code int, html string) {
-
+	c.SetHeader(ContentType, "text/html")
+	c.SetStatusCode(code)
+	if _, err := c.Writer.Write([]byte(html)); err != nil {
+		logger.INFO("set html return type error(context set return value):", err)
+	}
 }
 
 func (c *Context) Data(code int, data []byte) {
 	c.SetStatusCode(code)
 	if _, err := c.Writer.Write(data); err != nil {
-		codec.INFO("context data write error:", err)
+		logger.INFO("set data return type error(context set return value):", err)
 	}
 }
 
 func (c *Context) JSON(code int, data interface{}) {
-
+	c.SetHeader(ContentType, "application/json")
+	c.SetStatusCode(code)
+	encoder := json.NewEncoder(c.Writer)
+	if err := encoder.Encode(data); err != nil {
+		logger.INFO("set json return type error(context set return value):", err)
+	}
 }
