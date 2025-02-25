@@ -1,4 +1,4 @@
-package codec
+package prpc
 
 import (
 	"log"
