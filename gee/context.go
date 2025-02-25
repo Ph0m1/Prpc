@@ -80,5 +80,6 @@ func (c *Context) JSON(code int, data interface{}) {
 	encoder := json.NewEncoder(c.Writer)
 	if err := encoder.Encode(data); err != nil {
 		logger.INFO("set json return type error(context set return value):", err)
+		http.Error(c.Writer, err.Error(), 500)
 	}
 }
