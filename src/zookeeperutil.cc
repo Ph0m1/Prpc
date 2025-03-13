@@ -1,24 +1,19 @@
 #include "zookeeperutil.hpp"
-
-#include <condition_variable>
-
 #include "application.hpp"
 #include "logger.hpp"
 
-std::mutex cv_mutex;
-std::condition_variable cv;
-bool is_connected = false;
-
-void globle_watcher(zhandle_t* zh, int type, int status, const char* path,
-                    void* watcherCtx) {
+void ZkClient::global_watcher(zhandle_t* zh, int type, int state,
+                              const char* path, void* watcherCtx) {
   if (type == ZOO_SESSION_EVENT) {
-    std::lock_guard<std::mutex> lock(cv_mutex);
-    is_connected = true;
+    if (state == ZOO_CONNECTED_STATE) {
+      sem_t* sem = (sem_t*)zoo_get_context(zh);
+      sem_post(sem);
+    }
   }
-  cv.notify_all();
 }
 
 ZkClient::ZkClient() : m_zhandle(nullptr) {}
+
 ZkClient::~ZkClient() {
   if (m_zhandle != nullptr) {
     zookeeper_close(m_zhandle);
@@ -32,53 +27,132 @@ void ZkClient::Start() {
       Papplication::GetInstance().GetConfig().Load("zookeeperport");
   std::string connstr = host + ":" + port;
 
-  /*
-    zookeeper_mt：多线程版本
-    ZooKeeper的API客户端程序提供了三个线程：
-    1. API调用线程
-    2. 网络I/O线程（使用pthread_create和poll）
-    3. watcher回调线程（使用pthread_create）
-    */
 
-  m_zhandle = zookeeper_init(connstr.c_str(), globle_watcher, 6000, nullptr,
+  m_zhandle = zookeeper_init(connstr.c_str(), global_watcher, 6000, nullptr,
                              nullptr, 0);
-  if (nullptr == m_zhandle) {
-    LOG(ERROR) << "zookeeper_init error";
-    exit(EXIT_FAILURE);
+  sem_t sem;
+  sem_init(&sem, 0, 0);
+  m_zhandle =
+      zookeeper_init(connstr.c_str(), global_watcher, 30000, nullptr, &sem, 0);
+  if (m_zhandle == nullptr) {
+    LOG(FATAL) << "zookeeper_init error!";
   }
-
-  std::unique_lock<std::mutex> lock(cv_mutex);
-  cv.wait(lock, [] { return is_connected; });
+  sem_wait(&sem);
   LOG(INFO) << "zookeeper_init success: " << "current address: " << connstr;
+  sem_destroy(&sem);
 }
 
 void ZkClient::Create(const char* path, const char* data, int datalen,
                       int state) {
-  char path_buffer[128];
-  int bufferlen = sizeof(path_buffer);
+  // Create a context to pass data to the callbacks
+  auto context = new AsyncContext{.promise_rc = {},
+                                  .promise_data = {},
+                                  .zk_handle = m_zhandle,
+                                  .path = std::string(path),
+                                  .data = std::string(data, datalen),
+                                  .state = state};
+  auto future = context->promise_rc.get_future();
 
-  int flag = zoo_exists(m_zhandle, path, 0, nullptr);
-  if (flag == ZNONODE) {
-    flag = zoo_create(m_zhandle, path, data, datalen, &ZOO_OPEN_ACL_UNSAFE,
-                      state, path_buffer, bufferlen);
-    if (flag == ZOK) {  // 创建成功
-      LOG(INFO) << "znode create success... path:" << path;
-    } else {  // 创建失败
-      LOG(ERROR) << "znode create failed... path:" << path;
-      exit(EXIT_FAILURE);  // 退出程序
-    }
+  // Start the asynchronous chain by checking if the node exists
+  int rc = zoo_aexists(m_zhandle, path, 0, exists_completion_callback, context);
+  if (rc != ZOK) {
+    LOG(ERROR) << "zoo_aexists failed immediately for path: " << path
+               << " with error code: " << rc;
+    delete context;
+    return;
+  }
+
+  // Block and wait for the entire async operation (exists -> create) to
+  // complete
+  int final_rc = future.get();
+
+  if (final_rc == ZOK) {
+    LOG(INFO) << "Path: " << path << " created/existed successfully.";
+  } else {
+    LOG(ERROR) << "Failed to create path: " << path
+               << ". Final error code: " << final_rc;
   }
 }
-std::string ZkClient::GetData(const char* path) {
-  char buf[64];
-  int bufferlen = sizeof(buf);
 
-  int flag = zoo_get(m_zhandle, path, 0, buf, &bufferlen, nullptr);
-  if (flag != ZOK) {
+std::string ZkClient::GetData(const char* path) {
+  auto context = new AsyncContext();
+  auto future = context->promise_data.get_future();
+
+  // Call the asynchronous get function
+  int rc = zoo_aget(m_zhandle, path, 0, get_completion_callback, context);
+  if (rc != ZOK) {
     LOG(ERROR) << "zoo_get error";
+    delete context;
     return "";
-  } else {
-    return buf;
   }
-  return "";
+
+  // Block and wait for the asynchronous get operation to complete
+  auto result_pair = future.get();
+  if (result_pair.second != ZOK) {
+    LOG(ERROR) << "Failed to get data for path: " << path
+               << ". Final error code: " << result_pair.second;
+  }
+
+  return result_pair.first;
+}
+
+// Callback for zoo_aexists
+void ZkClient::exists_completion_callback(int rc, const struct Stat* stat,
+                                          const void* data) {
+  auto context = static_cast<AsyncContext*>(const_cast<void*>(data));
+
+  if (rc == ZOK) {
+    // Node already exists, the operation is considered successful.
+    context->promise_rc.set_value(ZOK);
+    delete context;
+  } else if (rc == ZNONODE) {
+    // Node does not exist, proceed to create it.
+    // The context is passed along to the next callback in the chain.
+    int create_rc = zoo_acreate(context->zk_handle, context->path.c_str(),
+                                context->data.c_str(), context->data.length(),
+                                &ZOO_OPEN_ACL_UNSAFE, context->state,
+                                create_completion_callback, context);
+    if (create_rc != ZOK) {
+      // If the call to zoo_acreate fails immediately, we must set the promise
+      // to unblock the waiting thread and prevent a memory leak.
+      context->promise_rc.set_value(create_rc);
+      delete context;
+    }
+    // If zoo_acreate is successfully queued, the promise will be set in
+    // create_completion_callback
+  } else {
+    // Another error occurred during zoo_aexists
+    context->promise_rc.set_value(rc);
+    delete context;
+  }
+}
+
+// Callback for zoo_acreate
+void ZkClient::create_completion_callback(int rc, const char* value,
+                                          const void* data) {
+  auto context = static_cast<AsyncContext*>(const_cast<void*>(data));
+  // This is the final step in the create chain, set the promise value with the
+  // result code.
+  context->promise_rc.set_value(rc);
+
+  // Clean up the context
+  delete context;
+}
+
+// Callback for zoo_aget
+void ZkClient::get_completion_callback(int rc, const char* value, int value_len,
+                                       const struct Stat* stat,
+                                       const void* data) {
+  auto context = static_cast<AsyncContext*>(const_cast<void*>(data));
+
+  if (rc == ZOK) {
+    // Operation successful, set the promise with the data and success code
+    context->promise_data.set_value({std::string(value, value_len), ZOK});
+  } else {
+    // Operation failed, set the promise with an empty string and the error code
+    context->promise_data.set_value({"", rc});
+  }
+
+  // Clean up the context
+  delete context;
 }
