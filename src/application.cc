@@ -35,9 +35,9 @@ void Papplication::Init(int argc, char** argv) {
   m_config.LoadConfigFile(config_file.c_str());
 }
 
-Papplication &Papplication::GetInstance() {
+Papplication& Papplication::GetInstance() {
   std::lock_guard<std::mutex> lock(m_mutex);
-  if (m_application == nullptr){
+  if (m_application == nullptr) {
     m_application = new Papplication();
     atexit(deleteInstance);
   }
@@ -51,6 +51,4 @@ void Papplication::deleteInstance() {
   }
 }
 
-Pconfig& Papplication::GetConfig() {
-  return m_config;
-}
+Pconfig& Papplication::GetConfig() { return m_config; }
