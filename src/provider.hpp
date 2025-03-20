@@ -23,4 +23,19 @@ class Pprovider {
   void HandleClientRequest(int clientfd);
 };
 
+class LambdaClosure : public google::protobuf::Closure {
+public:
+    explicit LambdaClosure(std::function<void()> func) : func_(std::move(func)) {}
+    ~LambdaClosure() {}
+
+    void Run() override {
+        func_();
+        // The closure is responsible for deleting itself after running.
+        delete this;
+    }
+
+private:
+    std::function<void()> func_;
+};
+
 #endif

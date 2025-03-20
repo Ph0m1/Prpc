@@ -24,15 +24,15 @@ void Pprovider::NotifyService(google::protobuf::Service* service) {
   const google::protobuf::ServiceDescriptor* pserviceDesc =
       service->GetDescriptor();
   // get service name
-  std::string service_name = pserviceDesc->name();
+  std::string service_name(pserviceDesc->name());
   int methodCnt = pserviceDesc->method_count();
 
   LOG(INFO) << "service_name: " << service_name;
 
   for (int i = 0; i < methodCnt; ++i) {
     const google::protobuf::MethodDescriptor* pmethodDesc =
-        pserviceDesc->Method(i);
-    std::string method_name = pmethodDesc->name();
+        pserviceDesc->method(i);
+    std::string method_name(pmethodDesc->name());
     service_info.m_methodMap.insert({method_name, pmethodDesc});
 
     LOG(INFO) << "method_name: " << method_name;
@@ -225,11 +225,11 @@ void Pprovider::HandleClientRequest(int clientfd) {
   }
 
   google::protobuf::Service* service = it->second.m_service;
-  const google::protobuf::MethodDescriptor* method = mit->second;
+  const google::protobuf::MethodDescriptor* methodDesc = mit->second;
 
   // generate the request and response parameters of the RPC method call
   google::protobuf::Message* request =
-      service->GetRequestPrototype(method).New();
+      service->GetRequestPrototype(methodDesc).New();
   if (!request->ParseFromString(args_str)) {
     LOG(ERROR) << "request parse error, content: " << args_str;
     delete request;
@@ -237,22 +237,43 @@ void Pprovider::HandleClientRequest(int clientfd) {
     return;
   }
   google::protobuf::Message* response =
-      service->GetResponsePrototype(method).New();
+      service->GetResponsePrototype(methodDesc).New();
 
   // set callback
   google::protobuf::Closure* done =
-      google::protobuf::NewCallback<void()>([clientfd, request, response]() {
+      new LambdaClosure([this, clientfd, request, response]() {
         std::string response_str;
         if (response->SerializeToString(&response_str)) {
-          if (send(clientfd, response_str.c_str(), response_str.size(), 0) <
-              0) {
-            LOG(ERROR) << "send response error!";
+          //
+          Prpc::RpcHeader response_header;
+          response_header.set_service_name("");
+          response_header.set_method_name("");
+          response_header.set_args_size(response_str.size());
+
+          std::string response_header_str;
+          if (response_header.SerializeToString(&response_header_str)) {
+            uint32_t header_len = response_header_str.size();
+            std::string final_response;
+            final_response.append((char*)&header_len, 4);
+            final_response.append(response_header_str);
+            final_response.append(response_str);
+
+            if (send(clientfd, final_response.c_str(), final_response.size(),
+                     0) < 0) {
+              LOG(ERROR) << "send response error!";
+            }
+          } else {
+            LOG(ERROR) << "serialize response header error!";
           }
         } else {
-          LOG(ERROR) << "serialize response error!";
+          LOG(ERROR) << "serialize response body error!";
         }
+
+        // Clean up the protobuf messages
         delete request;
         delete response;
       });
-  service->CallMethod(method, nullptr, request, response, done);
+
+  // call the RPC method
+  service->CallMethod(methodDesc, nullptr, request, response, done);
 }
