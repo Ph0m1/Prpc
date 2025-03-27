@@ -17,24 +17,27 @@
 #include "threadpool.hpp"
 #include "zookeeperutil.hpp"
 
-void Pprovider::NotifyService(google::protobuf::Service* service) {
+// Constructor definition
+Pprovider::Pprovider() : threadPool_(std::make_unique<ThreadPool>()) {}
+
+// Destructor definition - THIS IS IMPORTANT
+Pprovider::~Pprovider() {}
+
+void Pprovider::NotifyService(google::protobuf::Service *service) {
   ServiceInfo service_info;
 
-  // got service info
-  const google::protobuf::ServiceDescriptor* pserviceDesc =
+  const google::protobuf::ServiceDescriptor *pserviceDesc =
       service->GetDescriptor();
-  // get service name
   std::string service_name(pserviceDesc->name());
-  int methodCnt = pserviceDesc->method_count();
+  int method_cnt = pserviceDesc->method_count();
 
   LOG(INFO) << "service_name: " << service_name;
 
-  for (int i = 0; i < methodCnt; ++i) {
-    const google::protobuf::MethodDescriptor* pmethodDesc =
+  for (int i = 0; i < method_cnt; ++i) {
+    const google::protobuf::MethodDescriptor *pmethodDesc =
         pserviceDesc->method(i);
     std::string method_name(pmethodDesc->name());
     service_info.m_methodMap.insert({method_name, pmethodDesc});
-
     LOG(INFO) << "method_name: " << method_name;
   }
   service_info.m_service = service;
@@ -42,219 +45,159 @@ void Pprovider::NotifyService(google::protobuf::Service* service) {
 }
 
 void Pprovider::Run() {
-  // get settings
-  std::string ip = Papplication::GetInstance().GetConfig().Load("pcserverip");
-  uint16_t port = atoi(Papplication::GetInstance()
-                           .GetInstance()
-                           .GetConfig()
-                           .Load("repcserverport")
-                           .c_str());
-  int thread_num = atoi(Papplication::GetInstance()
-                            .GetInstance()
-                            .GetConfig()
-                            .Load("threadnum")
-                            .c_str());
-
-  ThreadPool threadpool(thread_num);
-
-  // create listening socket
-  int listenfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (listenfd == -1) {
-    LOG(ERROR) << "create socket error! errno: " << errno;
-    exit(EXIT_FAILURE);
-  }
-
-  // port reuse
-  int opt = 1;
-  setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-  sockaddr_in server_addr;
+  std::string ip = Papplication::GetInstance().GetConfig().Load("serverip");
+  uint16_t port =
+      atoi(Papplication::GetInstance().GetConfig().Load("serverport").c_str());
+  struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(port);
   server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
 
-  // bind
-  if (bind(listenfd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-    LOG(ERROR) << "bind error! errno: " << errno;
-    exit(EXIT_FAILURE);
+  int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (listenfd == -1) {
+    LOG(FATAL) << "create socket error!";
   }
 
-  // listen
-  if (listen(listenfd, SOMAXCONN) == -1) {
-    LOG(ERROR) << "listen error! errno: " << errno;
-    exit(EXIT_FAILURE);
+  int opt = 1;
+  setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+  if (bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) ==
+      -1) {
+    LOG(FATAL) << "bind error!";
   }
 
-  // create epoll
-  int epollfd = epoll_create1(0);
-  if (epollfd == -1) {
-    LOG(ERROR) << "epoll_create1 error! errno: " << errno;
-    exit(EXIT_FAILURE);
+  if (listen(listenfd, 20) == -1) {
+    LOG(FATAL) << "listen error!";
   }
-
-  epoll_event event;
-  event.events = EPOLLIN;
-  event.data.fd = listenfd;
-  epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &event);
-
-  LOG(INFO) << "RpcProvider start service at ip: " << ip << " port: " << port;
-
-  // register all services to be published on zk
+  LOG(INFO) << "Rpc provider start service at ip:" << ip << " port:" << port;
 
   ZkClient zkCli;
   zkCli.Start();
-  for (auto& sp : m_serviceMap) {
+  for (auto &sp : m_serviceMap) {
     std::string service_path = "/" + sp.first;
     zkCli.Create(service_path.c_str(), nullptr, 0);
-    for (auto& mp : sp.second.m_methodMap) {
+    for (auto &mp : sp.second.m_methodMap) {
       std::string method_path = service_path + "/" + mp.first;
       char method_path_data[128] = {0};
       sprintf(method_path_data, "%s:%d", ip.c_str(), port);
-      // ZOO_EPHEMERAL indicates that the znode is a temporary node
       zkCli.Create(method_path.c_str(), method_path_data,
                    strlen(method_path_data), ZOO_EPHEMERAL);
     }
   }
 
-  // epoll_wait
-  std::vector<epoll_event> ready_events(1024);
+  int epollfd = epoll_create1(0);
+  epoll_event events[1024];
+  epoll_event event;
+  event.events = EPOLLIN | EPOLLET;
+  event.data.fd = listenfd;
+  epoll_ctl(epollfd, EPOLL_CTL_ADD, listenfd, &event);
+
   while (true) {
-    int num_events =
-        epoll_wait(epollfd, &ready_events[0], ready_events.size(), -1);
-    if (num_events == -1) {
-      if (errno == EINTR) {
-        continue;
-      }
-      LOG(ERROR) << "epoll_wait error! errno: " << errno;
-      exit(EXIT_FAILURE);
+    int nfds = epoll_wait(epollfd, events, 1024, -1);
+    if (nfds == -1) {
+      if (errno == EINTR) continue;
+      LOG(ERROR) << "epoll_wait error";
+      break;
     }
 
-    for (int i = 0; i < num_events; ++i) {
-      int sockfd = ready_events[i].data.fd;
+    for (int i = 0; i < nfds; ++i) {
+      int sockfd = events[i].data.fd;
       if (sockfd == listenfd) {
-        // new client
-        sockaddr_in client_addr;
+        struct sockaddr_in client_addr;
         socklen_t client_addr_len = sizeof(client_addr);
-        int clientfd =
-            accept(listenfd, (sockaddr*)&client_addr, &client_addr_len);
-        if (clientfd == -1) {
-          LOG(ERROR) << "accept error! errno: " << errno;
+        int connfd =
+            accept(listenfd, (struct sockaddr *)&client_addr, &client_addr_len);
+        if (connfd < 0) {
+          LOG(ERROR) << "accept error";
           continue;
         }
+        LOG(INFO) << "new connection accepted.";
 
-        // listening
-        epoll_event client_event;
-        client_event.events = EPOLLIN;
-        client_event.data.fd = clientfd;
-        epoll_ctl(epollfd, EPOLL_CTL_ADD, clientfd, &client_event);
-        LOG(INFO) << "New connection, client fd: " << clientfd;
-      } else {
-        if (ready_events[i].events & EPOLLIN) {
-          threadpool.enqueue(
-              std::bind(&Pprovider::HandleClientRequest, this, sockfd));
-        }
+        event.data.fd = connfd;
+        event.events = EPOLLIN | EPOLLET;
+        epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &event);
+      } else if (events[i].events & EPOLLIN) {
+        threadPool_->enqueue(
+            std::bind(&Pprovider::HandleClientRequest, this, sockfd));
       }
     }
   }
+  close(listenfd);
+  close(epollfd);
 }
 
 void Pprovider::HandleClientRequest(int clientfd) {
-  char header_size_buf[4];
-  int n = recv(clientfd, header_size_buf, 4, 0);
-  if (n == 0) {
-    LOG(INFO) << "client fd: " << clientfd << " disconnected.";
-    close(clientfd);
-    return;
-  } else if (n < 0) {
-    LOG(ERROR) << "recv header size error, fd: " << clientfd
-               << " errno: " << errno;
+  int header_size = 0;
+  int n = recv(clientfd, &header_size, 4, 0);
+  if (n <= 0) {
     close(clientfd);
     return;
   }
 
-  uint32_t header_size = 0;
-  memcpy(&header_size, header_size_buf, 4);
-
-  // read RPC header
   std::string rpc_header_str(header_size, '\0');
   n = recv(clientfd, &rpc_header_str[0], header_size, 0);
   if (n <= 0) {
-    LOG(ERROR) << "recv header error, fd: " << clientfd << " errno: " << errno;
     close(clientfd);
     return;
   }
 
-  //
   Prpc::RpcHeader rpcHeader;
-  std::string service_name;
-  std::string method_name;
-  uint32_t args_size;
-  if (rpcHeader.ParseFromString(rpc_header_str)) {
-    service_name = rpcHeader.service_name();
-    method_name = rpcHeader.method_name();
-    args_size = rpcHeader.args_size();
-  } else {
-    LOG(ERROR) << "rpc_header_str: " << rpc_header_str << " parse error!";
+  if (!rpcHeader.ParseFromString(rpc_header_str)) {
+    LOG(ERROR) << "rpc_header_str parse error!";
     close(clientfd);
     return;
   }
 
-  // read rpc_args
+  std::string service_name = rpcHeader.service_name();
+  std::string method_name = rpcHeader.method_name();
+  uint32_t args_size = rpcHeader.args_size();
+
   std::string args_str(args_size, '\0');
   n = recv(clientfd, &args_str[0], args_size, 0);
   if (n <= 0) {
-    LOG(ERROR) << "recv args error, fd: " << clientfd << " errno: " << errno;
     close(clientfd);
     return;
   }
 
-  // get service and method
-  auto it = m_serviceMap.find(service_name);
-  if (it == m_serviceMap.end()) {
-    LOG(ERROR) << service_name << " is not a valid service!";
+  auto sit = m_serviceMap.find(service_name);
+  if (sit == m_serviceMap.end()) {
+    LOG(ERROR) << service_name << " is not exist!";
+    close(clientfd);
+    return;
+  }
+  auto mit = sit->second.m_methodMap.find(method_name);
+  if (mit == sit->second.m_methodMap.end()) {
+    LOG(ERROR) << service_name << ":" << method_name << " is not exist!";
     close(clientfd);
     return;
   }
 
-  auto mit = it->second.m_methodMap.find(method_name);
-  if (mit == it->second.m_methodMap.end()) {
-    LOG(ERROR) << service_name << ":" << method_name
-               << " is not a calid method!";
-    close(clientfd);
-    return;
-  }
+  google::protobuf::Service *service = sit->second.m_service;
+  const google::protobuf::MethodDescriptor *methodDesc = mit->second;
 
-  google::protobuf::Service* service = it->second.m_service;
-  const google::protobuf::MethodDescriptor* methodDesc = mit->second;
-
-  // generate the request and response parameters of the RPC method call
-  google::protobuf::Message* request =
+  google::protobuf::Message *request =
       service->GetRequestPrototype(methodDesc).New();
   if (!request->ParseFromString(args_str)) {
-    LOG(ERROR) << "request parse error, content: " << args_str;
+    LOG(ERROR) << "request parse error, content:" << args_str;
     delete request;
     close(clientfd);
     return;
   }
-  google::protobuf::Message* response =
+  google::protobuf::Message *response =
       service->GetResponsePrototype(methodDesc).New();
 
-  // set callback
-  google::protobuf::Closure* done =
+  google::protobuf::Closure *done =
       new LambdaClosure([this, clientfd, request, response]() {
         std::string response_str;
         if (response->SerializeToString(&response_str)) {
-          //
           Prpc::RpcHeader response_header;
-          response_header.set_service_name("");
-          response_header.set_method_name("");
           response_header.set_args_size(response_str.size());
 
           std::string response_header_str;
           if (response_header.SerializeToString(&response_header_str)) {
             uint32_t header_len = response_header_str.size();
             std::string final_response;
-            final_response.append((char*)&header_len, 4);
+            final_response.append((char *)&header_len, 4);
             final_response.append(response_header_str);
             final_response.append(response_str);
 
@@ -268,12 +211,9 @@ void Pprovider::HandleClientRequest(int clientfd) {
         } else {
           LOG(ERROR) << "serialize response body error!";
         }
-
-        // Clean up the protobuf messages
         delete request;
         delete response;
       });
 
-  // call the RPC method
   service->CallMethod(methodDesc, nullptr, request, response, done);
 }
