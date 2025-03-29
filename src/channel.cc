@@ -5,106 +5,137 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include "controller.hpp"
 #include "header.pb.h"
 #include "logger.hpp"
 #include "zookeeperutil.hpp"
 
 std::mutex g_data_mutx;
 
-void Pchannel::CallMethod(const ::google::protobuf::MethodDescriptor *method,
-                          ::google::protobuf::RpcController *controller,
-                          const ::google::protobuf::Message *request,
-                          ::google::protobuf::Message *response,
-                          ::google::protobuf::Closure *done) {
-  if (-1 == m_clientfd) {
-    const google::protobuf::ServiceDescriptor *sd = method->service();
-    service_name = sd->name();
-    method_name = method->name();
+void Pchannel::CallMethod(const google::protobuf::MethodDescriptor *method,
+                          google::protobuf::RpcController *controller,
+                          const google::protobuf::Message *request,
+                          google::protobuf::Message *response,
+                          google::protobuf::Closure *done) {
+  const google::protobuf::ServiceDescriptor *sd = method->service();
+  std::string service_name(sd->name());
+  std::string method_name(method->name());
 
-    ZkClient zkCli;
-    zkCli.Start();
-    std::string host_data =
-        QueryServiceHost(&zkCli, service_name, method_name, m_idx);
-    m_ip = host_data.substr(0, m_idx);
-    LOG(INFO) << "ip: " << m_ip;
-    m_port =
-        atoi(host_data.substr(m_idx + 1, host_data.size() - m_idx).c_str());
-    LOG(INFO) << "port: " << m_port;
-
-    auto rt = newConnect(m_ip.c_str(), m_port);
-    if (!rt) {
-      LOG(ERROR) << "connect server error";
-      return;
-    } else {
-      LOG(INFO) << "connect server success";
-    }
-  }
-
-  uint32_t args_size{};
   std::string args_str;
-  if (request->SerializeToString(&args_str)) {
-    args_size = args_str.size();
-  } else {
-    controller->SetFailed("serialize request fail");
+  if (!request->SerializeToString(&args_str)) {
+    controller->SetFailed("serialize request error!");
     return;
   }
 
-  // header info and settings
-  Prpc::RpcHeader prpcheader;
-  prpcheader.set_service_name(service_name);
-  prpcheader.set_method_name(method_name);
-  prpcheader.set_args_size(args_size);
+  Prpc::RpcHeader rpcHeader;
+  rpcHeader.set_service_name(service_name);
+  rpcHeader.set_method_name(method_name);
+  rpcHeader.set_args_size(args_str.size());
 
-  // make header to string
-  uint32_t header_size = 0;
   std::string rpc_header_str;
-  if (prpcheader.SerializePartialToString(&rpc_header_str)) {
-    header_size = rpc_header_str.size();
-  } else {
+  if (!rpcHeader.SerializeToString(&rpc_header_str)) {
     controller->SetFailed("serialize rpc header error!");
     return;
   }
 
-  // make RPC request message
+  uint32_t header_size = rpc_header_str.size();
   std::string send_rpc_str;
-  {
-    google::protobuf::io::StringOutputStream string_output(&send_rpc_str);
-    google::protobuf::io::CodedOutputStream coded_output(&string_output);
-    coded_output.WriteVarint32(static_cast<uint32_t>(header_size));
-    coded_output.WriteString(rpc_header_str);
-  }
+  send_rpc_str.append((char *)&header_size, 4);
+  send_rpc_str += rpc_header_str;
   send_rpc_str += args_str;
 
-  // send RPC request
-  if (-1 == send(m_clientfd, send_rpc_str.c_str(), send_rpc_str.size(), 0)) {
-    close(m_clientfd);
-    char errtxt[512] = {};
-    LOG(ERROR) << "send error: " << strerror_r(errno, errtxt, sizeof(errtxt));
-    controller->SetFailed(errtxt);
+  ZkClient zkCli;
+  zkCli.Start();
+  std::string method_path = "/" + service_name + "/" + method_name;
+  std::string host_data = zkCli.GetData(method_path.c_str());
+  if (host_data.empty()) {
+    controller->SetFailed(method_path + " is not exist!");
     return;
   }
 
-  // response received
+  size_t idx = host_data.find(":");
+  if (idx == std::string::npos) {
+    controller->SetFailed(method_path + " address is invalid!");
+    return;
+  }
+  std::string ip = host_data.substr(0, idx);
+  uint16_t port = atoi(host_data.substr(idx + 1).c_str());
+
+  int clientfd = -1;
+  {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_connections.count(host_data)) {
+      clientfd = m_connections[host_data];
+    }
+  }
+
+  if (clientfd == -1) {
+    clientfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientfd == -1) {
+      controller->SetFailed("create socket error!");
+      return;
+    }
+
+    sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+
+    if (connect(clientfd, (sockaddr *)&server_addr, sizeof(server_addr)) ==
+        -1) {
+      controller->SetFailed("connect error!");
+      close(clientfd);
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(m_mutex);
+      m_connections[host_data] = clientfd;
+    }
+  }
+
+  Pcontroller *p_controller = dynamic_cast<Pcontroller *>(controller);
+  if (p_controller) {
+    int timeout_ms = p_controller->GetTimeout();
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+  }
+
+  if (send(clientfd, send_rpc_str.c_str(), send_rpc_str.size(), 0) == -1) {
+    controller->SetFailed("send error!");
+    close(clientfd);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_connections.erase(host_data);
+    return;
+  }
+
   char recv_buf[1024] = {0};
-  int recv_size = 0;
-  if (-1 == (recv_size = recv(m_clientfd, recv_buf, 1024, 0))) {
-    close(m_clientfd);
-    char errtxt[512] = {};
-    LOG(ERROR) << "parse error" << strerror_r(errno, errtxt, sizeof(errtxt));
-    controller->SetFailed(errtxt);
+  int recv_size = recv(clientfd, recv_buf, sizeof(recv_buf), 0);
+  if (recv_size <= 0) {
+    if (recv_size == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      controller->SetFailed("recv timeout!");
+    } else {
+      controller->SetFailed("recv error!");
+    }
+    close(clientfd);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_connections.erase(host_data);
     return;
   }
 
-  // deserialize into response object
   if (!response->ParseFromArray(recv_buf, recv_size)) {
-    close(m_clientfd);
-    char errtxt[512] = {};
-    LOG(ERROR) << "parse error" << strerror_r(errno, errtxt, sizeof(errtxt));
-    controller->SetFailed(errtxt);
+    controller->SetFailed("parse error!");
+    close(clientfd);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_connections.erase(host_data);
     return;
   }
 
-  close(m_clientfd);
+  if (done != nullptr) {
+    done->Run();
+  }
 }
 
 bool Pchannel::newConnect(const char *ip, uint16_t port) {
