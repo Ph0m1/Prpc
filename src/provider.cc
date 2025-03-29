@@ -45,9 +45,9 @@ void Pprovider::NotifyService(google::protobuf::Service *service) {
 }
 
 void Pprovider::Run() {
-  std::string ip = Papplication::GetInstance().GetConfig().Load("serverip");
-  uint16_t port =
-      atoi(Papplication::GetInstance().GetConfig().Load("serverport").c_str());
+  std::string ip = Papplication::GetInstance().GetConfig().Load("rpcserverip");
+  uint16_t port = atoi(
+      Papplication::GetInstance().GetConfig().Load("rpcserverport").c_str());
   struct sockaddr_in server_addr;
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(port);

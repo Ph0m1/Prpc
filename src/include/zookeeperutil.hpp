@@ -17,6 +17,7 @@ class ZkClient {
 
  private:
   zhandle_t *m_zhandle;
+  sem_t m_sem;
 
   struct AsyncContext {
     std::promise<int> promise_rc;

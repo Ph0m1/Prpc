@@ -1,4 +1,5 @@
 #include "zookeeperutil.hpp"
+
 #include "application.hpp"
 #include "logger.hpp"
 
@@ -6,18 +7,23 @@ void ZkClient::global_watcher(zhandle_t* zh, int type, int state,
                               const char* path, void* watcherCtx) {
   if (type == ZOO_SESSION_EVENT) {
     if (state == ZOO_CONNECTED_STATE) {
-      sem_t* sem = (sem_t*)zoo_get_context(zh);
-      sem_post(sem);
+      ZkClient* zk_client = (ZkClient*)zoo_get_context(zh);
+      if (zk_client) {
+        sem_post(&zk_client->m_sem);
+      }
     }
   }
 }
 
-ZkClient::ZkClient() : m_zhandle(nullptr) {}
+ZkClient::ZkClient() : m_zhandle(nullptr) {
+  sem_init(&m_sem, 0, 0);
+}
 
 ZkClient::~ZkClient() {
   if (m_zhandle != nullptr) {
     zookeeper_close(m_zhandle);
   }
+  sem_destroy(&m_sem);
 }
 
 void ZkClient::Start() {
@@ -27,19 +33,14 @@ void ZkClient::Start() {
       Papplication::GetInstance().GetConfig().Load("zookeeperport");
   std::string connstr = host + ":" + port;
 
-
-  m_zhandle = zookeeper_init(connstr.c_str(), global_watcher, 6000, nullptr,
+  m_zhandle = zookeeper_init(connstr.c_str(), global_watcher, 3000, nullptr,
                              nullptr, 0);
-  sem_t sem;
-  sem_init(&sem, 0, 0);
-  m_zhandle =
-      zookeeper_init(connstr.c_str(), global_watcher, 30000, nullptr, &sem, 0);
+
   if (m_zhandle == nullptr) {
     LOG(FATAL) << "zookeeper_init error!";
   }
-  sem_wait(&sem);
+  sem_wait(&m_sem);
   LOG(INFO) << "zookeeper_init success: " << "current address: " << connstr;
-  sem_destroy(&sem);
 }
 
 void ZkClient::Create(const char* path, const char* data, int datalen,
