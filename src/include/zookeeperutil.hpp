@@ -11,13 +11,15 @@ class ZkClient {
   ZkClient();
   ~ZkClient();
 
-  void Start();
+  void Start(std::function<void()> session_expired_cb = nullptr);
   void Create(const char *path, const char *data, int datalen, int state = 0);
   std::string GetData(const char *path);
 
  private:
   zhandle_t *m_zhandle;
   sem_t m_sem;
+  // Session expiration callback
+  std::function<void()> m_session_expired_cb;
 
   struct AsyncContext {
     std::promise<int> promise_rc;

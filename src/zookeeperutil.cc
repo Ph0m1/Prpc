@@ -15,9 +15,7 @@ void ZkClient::global_watcher(zhandle_t* zh, int type, int state,
   }
 }
 
-ZkClient::ZkClient() : m_zhandle(nullptr) {
-  sem_init(&m_sem, 0, 0);
-}
+ZkClient::ZkClient() : m_zhandle(nullptr) { sem_init(&m_sem, 0, 0); }
 
 ZkClient::~ZkClient() {
   if (m_zhandle != nullptr) {
@@ -26,12 +24,18 @@ ZkClient::~ZkClient() {
   sem_destroy(&m_sem);
 }
 
-void ZkClient::Start() {
+void ZkClient::Start(std::function<void()> session_expired_cb) {
+  m_session_expired_cb = session_expired_cb;
+
   std::string host =
       Papplication::GetInstance().GetConfig().Load("zookeeperip");
   std::string port =
       Papplication::GetInstance().GetConfig().Load("zookeeperport");
   std::string connstr = host + ":" + port;
+  if (m_zhandle != nullptr) {
+    zookeeper_close(m_zhandle);
+    m_zhandle = nullptr;
+  }
 
   m_zhandle = zookeeper_init(connstr.c_str(), global_watcher, 3000, nullptr,
                              nullptr, 0);

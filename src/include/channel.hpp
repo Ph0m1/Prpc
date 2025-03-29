@@ -21,6 +21,8 @@ class Pchannel : public google::protobuf::RpcChannel {
   uint16_t m_port;
   std::string method_name;
   int m_idx;
+  std::unordered_map<std::string, int> m_connections;
+  std::mutex m_mutex;
   bool newConnect(const char *ip, uint16_t port);
   std::string QueryServiceHost(ZkClient *zkclient, std::string service_name,
                                std::string method_name, int &idx);
