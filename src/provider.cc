@@ -18,7 +18,9 @@
 #include "zookeeperutil.hpp"
 
 // Constructor definition
-Pprovider::Pprovider() : threadPool_(std::make_unique<ThreadPool>()) {}
+Pprovider::Pprovider()
+    : m_threadPool(std::make_unique<ThreadPool>()),
+      m_zkClient(std::make_unique<ZkClient>()) {}
 
 // Destructor definition - THIS IS IMPORTANT
 Pprovider::~Pprovider() {}
@@ -42,6 +44,29 @@ void Pprovider::NotifyService(google::protobuf::Service *service) {
   }
   service_info.m_service = service;
   m_serviceMap.insert({service_name, service_info});
+}
+void Pprovider::RegisterServices() {
+  std::string ip = Papplication::GetInstance().GetConfig().Load("rpcserverip");
+  uint16_t port = atoi(
+      Papplication::GetInstance().GetConfig().Load("rpcserverport").c_str());
+  for (auto &sp : m_serviceMap) {
+    std::string service_path = "/" + sp.first;
+    m_zkClient->Create(service_path.c_str(), nullptr, 0);
+    for (auto &mp : sp.second.m_methodMap) {
+      std::string method_path = service_path + "/" + mp.first;
+      char method_path_data[128] = {0};
+      sprintf(method_path_data, "%s:%d", ip.c_str(), port);
+      m_zkClient->Create(method_path.c_str(), method_path_data,
+                         strlen(method_path_data), ZOO_EPHEMERAL);
+    }
+  }
+}
+
+void Pprovider::OnZkSessionExpired() {
+  LOG(ERROR)
+      << "ZK session expired, re-connecting and re-registering services...";
+  m_zkClient->Start(std::bind(&Pprovider::OnZkSessionExpired, this));
+  RegisterServices();
 }
 
 void Pprovider::Run() {
@@ -71,19 +96,8 @@ void Pprovider::Run() {
   }
   LOG(INFO) << "Rpc provider start service at ip:" << ip << " port:" << port;
 
-  ZkClient zkCli;
-  zkCli.Start();
-  for (auto &sp : m_serviceMap) {
-    std::string service_path = "/" + sp.first;
-    zkCli.Create(service_path.c_str(), nullptr, 0);
-    for (auto &mp : sp.second.m_methodMap) {
-      std::string method_path = service_path + "/" + mp.first;
-      char method_path_data[128] = {0};
-      sprintf(method_path_data, "%s:%d", ip.c_str(), port);
-      zkCli.Create(method_path.c_str(), method_path_data,
-                   strlen(method_path_data), ZOO_EPHEMERAL);
-    }
-  }
+  m_zkClient->Start(std::bind(&Pprovider::OnZkSessionExpired, this));
+  RegisterServices();
 
   int epollfd = epoll_create1(0);
   epoll_event events[1024];
@@ -117,7 +131,7 @@ void Pprovider::Run() {
         event.events = EPOLLIN | EPOLLET;
         epoll_ctl(epollfd, EPOLL_CTL_ADD, connfd, &event);
       } else if (events[i].events & EPOLLIN) {
-        threadPool_->enqueue(
+        m_threadPool->submit(
             std::bind(&Pprovider::HandleClientRequest, this, sockfd));
       }
     }
@@ -186,34 +200,19 @@ void Pprovider::HandleClientRequest(int clientfd) {
   google::protobuf::Message *response =
       service->GetResponsePrototype(methodDesc).New();
 
-  google::protobuf::Closure *done =
-      new LambdaClosure([this, clientfd, request, response]() {
-        std::string response_str;
-        if (response->SerializeToString(&response_str)) {
-          Prpc::RpcHeader response_header;
-          response_header.set_args_size(response_str.size());
-
-          std::string response_header_str;
-          if (response_header.SerializeToString(&response_header_str)) {
-            uint32_t header_len = response_header_str.size();
-            std::string final_response;
-            final_response.append((char *)&header_len, 4);
-            final_response.append(response_header_str);
-            final_response.append(response_str);
-
-            if (send(clientfd, final_response.c_str(), final_response.size(),
-                     0) < 0) {
-              LOG(ERROR) << "send response error!";
-            }
-          } else {
-            LOG(ERROR) << "serialize response header error!";
-          }
-        } else {
-          LOG(ERROR) << "serialize response body error!";
-        }
-        delete request;
-        delete response;
-      });
+  google::protobuf::Closure *done = new LambdaClosure([this, clientfd, request,
+                                                       response]() {
+    std::string response_str;
+    if (response->SerializeToString(&response_str)) {
+      if (send(clientfd, response_str.c_str(), response_str.size(), 0) < 0) {
+        LOG(ERROR) << "send response error!";
+      }
+    } else {
+      LOG(ERROR) << "serialize response error!";
+    }
+    delete request;
+    delete response;
+  });
 
   service->CallMethod(methodDesc, nullptr, request, response, done);
 }

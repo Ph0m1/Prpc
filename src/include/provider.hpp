@@ -15,18 +15,21 @@ struct ServiceInfo {
 
 class Pprovider {
  public:
-  void NotifyService(google::protobuf::Service* servuce);
   Pprovider();
   ~Pprovider();
+
+  void NotifyService(google::protobuf::Service* servuce);
   void Run();
 
  private:
-  std::unordered_map<std::string, ServiceInfo>
-      m_serviceMap;  // 保存服务对象和rpc方法
-
+  void RegisterServices();
+  void OnZkSessionExpired();
   void HandleClientRequest(int clientfd);
 
-  std::unique_ptr<ThreadPool> threadPool_;
+  std::unordered_map<std::string, ServiceInfo>
+      m_serviceMap;  // 保存服务对象和rpc方法
+  std::unique_ptr<ThreadPool> m_threadPool;
+  std::unique_ptr<ZkClient> m_zkClient;
 };
 
 class LambdaClosure : public google::protobuf::Closure {
