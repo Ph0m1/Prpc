@@ -1,9 +1,9 @@
-#ifndef PRPC_ERROR_EXAMPLE_HPP
-#define PRPC_ERROR_EXAMPLE_HPP
+#ifndef PRPC_ERROR_EXAMPLE_H
+#define PRPC_ERROR_EXAMPLE_H
 
-#include "error.hpp"
-#include "network_utils.hpp"
-#include "logger.hpp"
+#include "error.h"
+#include "network_utils.h"
+#include "logger.h"
 #include <iostream>
 
 namespace prpc {
@@ -206,4 +206,4 @@ private:
 } // namespace example
 } // namespace prpc
 
-#endif // PRPC_ERROR_EXAMPLE_HPP 
+#endif // PRPC_ERROR_EXAMPLE_H 

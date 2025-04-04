@@ -1,5 +1,5 @@
-#ifndef _Pcontroller_HPP
-#define _Pcontroller_HPP
+#ifndef _Pcontroller_H
+#define _Pcontroller_H
 
 #include <google/protobuf/service.h>
 

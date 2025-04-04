@@ -1,9 +1,9 @@
-#ifndef _Pprovider_HPP
-#define _Pprovider_HPP
+#ifndef _Pprovider_H
+#define _Pprovider_H
 
 #include <google/protobuf/service.h>
 
-#include "zookeeperutil.hpp"
+#include "zookeeperutil.h"
 
 class ThreadPool;
 

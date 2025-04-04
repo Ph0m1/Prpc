@@ -1,5 +1,5 @@
-#ifndef PRPC_NETWORK_UTILS_HPP
-#define PRPC_NETWORK_UTILS_HPP
+#ifndef PRPC_NETWORK_UTILS_H
+#define PRPC_NETWORK_UTILS_H
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <memory>
 #include <string>
-#include "error.hpp"
+#include "error.h"
 
 namespace prpc {
 namespace network {
@@ -233,4 +233,4 @@ namespace utils {
 } // namespace network
 } // namespace prpc
 
-#endif // PRPC_NETWORK_UTILS_HPP 
+#endif // PRPC_NETWORK_UTILS_H 

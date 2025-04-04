@@ -1,11 +1,11 @@
-#ifndef _Papplication_HPP
-#define _Papplication_HPP
+#ifndef _Papplication_H
+#define _Papplication_H
 
 #include <mutex>
 
-#include "channel.hpp"
-#include "conf.hpp"
-#include "controller.hpp"
+#include "channel.h"
+#include "conf.h"
+#include "controller.h"
 
 class Papplication {
  public:

@@ -1,6 +1,6 @@
 #include "../user.pb.h"
-#include "application.hpp"
-#include "provider.hpp"
+#include "application.h"
+#include "provider.h"
 
 class UserService : public Puser::UserServiceRpc {
  public:

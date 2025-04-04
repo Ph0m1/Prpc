@@ -1,5 +1,5 @@
-#include "application.hpp"
-#include "error.hpp"
+#include "application.h"
+#include "error.h"
 
 #include <unistd.h>
 

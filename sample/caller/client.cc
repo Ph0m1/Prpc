@@ -1,11 +1,11 @@
-#include "application.hpp"
+#include "application.h"
 #include "../user.pb.h"
-#include "controller.hpp"
+#include "controller.h"
 #include <iostream>
 #include <atomic>
 #include <thread>
 #include <chrono>
-#include "logger.hpp"
+#include "logger.h"
 
 // 发送 RPC 请求的函数，模拟客户端调用远程服务
 void send_request(int thread_id, std::atomic<int> &success_count, std::atomic<int> &fail_count) {

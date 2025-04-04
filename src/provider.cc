@@ -1,4 +1,4 @@
-#include "provider.hpp"
+#include "provider.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -11,11 +11,11 @@
 #include <string>
 #include <vector>
 
-#include "application.hpp"
+#include "application.h"
 #include "header.pb.h"
-#include "logger.hpp"
-#include "threadpool.hpp"
-#include "zookeeperutil.hpp"
+#include "logger.h"
+#include "threadpool.h"
+#include "zookeeperutil.h"
 
 // Constructor definition
 Pprovider::Pprovider()

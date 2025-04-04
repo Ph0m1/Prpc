@@ -1,14 +1,14 @@
-#include "channel.hpp"
+#include "channel.h"
 
 #include <arpa/inet.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "controller.hpp"
+#include "controller.h"
 #include "header.pb.h"
-#include "logger.hpp"
-#include "zookeeperutil.hpp"
+#include "logger.h"
+#include "zookeeperutil.h"
 
 std::mutex g_data_mutx;
 

@@ -1,4 +1,4 @@
-#include "controller.hpp"
+#include "controller.h"
 
 Pcontroller::Pcontroller() : m_failed(false), m_errText(""), m_timeout_ms(5000) {}
 

@@ -1,7 +1,7 @@
-#include "zookeeperutil.hpp"
+#include "zookeeperutil.h"
 
-#include "application.hpp"
-#include "logger.hpp"
+#include "application.h"
+#include "logger.h"
 
 void ZkClient::global_watcher(zhandle_t* zh, int type, int state,
                               const char* path, void* watcherCtx) {

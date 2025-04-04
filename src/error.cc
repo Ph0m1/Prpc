@@ -1,4 +1,4 @@
-#include "error.hpp"
+#include "error.h"
 
 namespace prpc {
 

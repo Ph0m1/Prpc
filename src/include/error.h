@@ -1,5 +1,5 @@
-#ifndef PRPC_ERROR_HPP
-#define PRPC_ERROR_HPP
+#ifndef PRPC_ERROR_H
+#define PRPC_ERROR_H
 
 #include <stdexcept>
 #include <string>
@@ -255,4 +255,4 @@ namespace config {
 
 } // namespace prpc
 
-#endif // PRPC_ERROR_HPP 
+#endif // PRPC_ERROR_H 

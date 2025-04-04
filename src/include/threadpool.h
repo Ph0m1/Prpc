@@ -1,5 +1,5 @@
-#ifndef THREADPOOL_HPP
-#define THREADPOOL_HPP
+#ifndef THREADPOOL_H
+#define THREADPOOL_H
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -72,4 +72,4 @@ class ThreadPool {
   bool stop;
 };
 
-#endif  // THREADPOOL_HPP
+#endif  // THREADPOOL_H

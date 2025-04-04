@@ -1,5 +1,5 @@
-#ifndef PRPC_LOGGER_HPP
-#define PRPC_LOGGER_HPP
+#ifndef PRPC_LOGGER_H
+#define PRPC_LOGGER_H
 
 #include <iostream>
 #include <string>
@@ -119,4 +119,4 @@ private:
 // 定义日志宏，这是用户使用的唯一接口
 #define LOG(level) LogStream(level, __FILE__, __LINE__)
 
-#endif // PRPC_LOGGER_HPP
+#endif // PRPC_LOGGER_H

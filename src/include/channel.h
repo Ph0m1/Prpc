@@ -1,9 +1,9 @@
-#ifndef _Pchannel_HPP
-#define _Pchannel_HPP
+#ifndef _Pchannel_H
+#define _Pchannel_H
 // From google::protobuf::RpcChannel
 #include <google/protobuf/service.h>
 
-#include "zookeeperutil.hpp"
+#include "zookeeperutil.h"
 class Pchannel : public google::protobuf::RpcChannel {
  public:
   Pchannel(bool connectNow);

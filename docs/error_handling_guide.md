@@ -72,7 +72,7 @@ class Result {
 ### 1. 基本错误处理
 
 ```cpp
-#include "error.hpp"
+#include "error.h"
 
 // 使用Result返回类型
 prpc::Result<int> safeDivide(int a, int b) {
@@ -98,7 +98,7 @@ if (result.isSuccess()) {
 ### 2. RAII资源管理
 
 ```cpp
-#include "error.hpp"
+#include "error.h"
 
 // 使用ScopedResource管理文件
 prpc::Result<void> safeFileOperation(const std::string& filename) {
@@ -123,7 +123,7 @@ prpc::Result<void> safeFileOperation(const std::string& filename) {
 ### 3. 网络操作异常安全
 
 ```cpp
-#include "network_utils.hpp"
+#include "network_utils.h"
 
 prpc::Result<void> safeNetworkOperation(const std::string& ip, uint16_t port) {
     try {
@@ -148,8 +148,8 @@ prpc::Result<void> safeNetworkOperation(const std::string& ip, uint16_t port) {
 ### 4. 全局错误处理器
 
 ```cpp
-#include "error.hpp"
-#include "logger.hpp"
+#include "error.h"
+#include "logger.h"
 
 // 设置全局错误处理器
 prpc::ErrorHandler::setGlobalErrorHandler([](const prpc::PrpcException& e) {
@@ -177,7 +177,7 @@ prpc::ErrorHandler::setGlobalErrorHandler([](const prpc::PrpcException& e) {
 ### 5. 安全执行函数
 
 ```cpp
-#include "error.hpp"
+#include "error.h"
 
 // 使用ErrorHandler::safeExecute包装可能抛出异常的函数
 auto result = prpc::ErrorHandler::safeExecute([]() -> std::string {

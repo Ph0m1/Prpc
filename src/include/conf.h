@@ -1,8 +1,8 @@
-#ifndef _Pconfig_HPP
-#define _Pconfig_HPP
+#ifndef _Pconfig_H
+#define _Pconfig_H
 #include <unordered_map>
 #include <string>
-#include "error.hpp"
+#include "error.h"
 
 class Pconfig{
     public:

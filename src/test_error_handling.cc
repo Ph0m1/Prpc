@@ -1,8 +1,8 @@
-#include "error.hpp"
-#include "network_utils.hpp"
-#include "logger.hpp"
-#include "conf.hpp"
-#include "application.hpp"
+#include "error.h"
+#include "network_utils.h"
+#include "logger.h"
+#include "conf.h"
+#include "application.h"
 #include <iostream>
 #include <cassert>
 
@@ -144,7 +144,8 @@ void testScopedResource() {
     // 测试文件资源管理
     {
         FILE* fp = fopen("/dev/null", "r");
-        ScopedResource<FILE*> file(fp, [](FILE* f) { if (f) fclose(f); });
+        ScopedResource<FILE*> file(fp);
+        file.setCleanup([](FILE*& f) { if (f) { fclose(f); f = nullptr; } });
         
         if (file.get()) {
             assert(file.get() != nullptr);
