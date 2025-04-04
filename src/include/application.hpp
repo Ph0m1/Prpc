@@ -9,7 +9,7 @@
 
 class Papplication {
  public:
-  static void Init(int argc, char** argv);
+  static prpc::Result<void> Init(int argc, char** argv);
   static Papplication& GetInstance();
   static void deleteInstance();
   static Pconfig& GetConfig();

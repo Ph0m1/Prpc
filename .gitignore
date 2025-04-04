@@ -4,3 +4,35 @@ build
 build/*
 out
 out/*
+
+# 忽略常见的依赖目录
+node_modules/
+dist/
+tmp/
+temp/
+.cache/
+logs/
+log/
+
+# 忽略操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 忽略环境配置文件
+.env
+.env.*
+*.local
+
+# 忽略打包和编译产物
+*.log
+*.tmp
+*.swp
+*.swo
+
+# 忽略测试覆盖率文件
+coverage/
+.nyc_output/
+
+# 忽略 IDE 配置文件
+.idea/
+*.iml

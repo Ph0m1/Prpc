@@ -39,6 +39,7 @@ aux_source_directory(. SRC_LIST)
 add_library(prpc_provider STATIC
     ${SRC_LIST}
     ${PROTO_GENERATED_SRCS}
+    error.cc
 )
 
 add_dependencies(prpc_provider proto_gen)
