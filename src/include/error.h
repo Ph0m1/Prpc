@@ -172,7 +172,14 @@ public:
         try {
             return Result<decltype(func())>(func());
         } catch (const PrpcException& e) {
-            handleException(e);
+            // 记录错误但不重新抛出，确保函数安全
+            if (global_error_handler_) {
+                try {
+                    global_error_handler_(e);
+                } catch (...) {
+                    // 忽略全局处理器的异常，保证safeExecute的安全性
+                }
+            }
             return Result<decltype(func())>(e.getErrorCode(), e.what());
         } catch (const std::exception& e) {
             return Result<decltype(func())>(ErrorCode::UNKNOWN_ERROR, e.what());

@@ -16,6 +16,9 @@ prpc::Result<void> Papplication::Init(int argc, char** argv) {
       throw prpc::ConfigException("Format should use: command -i <config_file_path>");
     }
 
+    // 重置getopt状态，支持多次调用
+    optind = 1;
+    
     int o;
     std::string config_file;
     while (-1 != (o = getopt(argc, argv, "i:"))) {

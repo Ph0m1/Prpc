@@ -9,6 +9,9 @@ prpc::Result<void> Pconfig::LoadConfigFile(const char* config_file){
             throw prpc::ConfigException("Configuration file path is null");
         }
         
+        // 清空现有配置，支持重新加载
+        config_map.clear();
+        
         std::unique_ptr<FILE, decltype(&fclose)>pf(
             fopen(config_file, "r"),
             &fclose
@@ -37,7 +40,7 @@ prpc::Result<void> Pconfig::LoadConfigFile(const char* config_file){
             std::string value = read_buf.substr(index+1, endindex-index-1);
             Trim(value);
 
-            config_map.insert({key, value});
+            config_map[key] = value; // 使用[]操作符支持覆盖
         }
         
         return prpc::Result<void>();

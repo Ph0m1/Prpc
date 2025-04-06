@@ -29,3 +29,4 @@ set(PRPC_LIBS
 # Add the subdirectory. It will inherit the settings above.
 add_subdirectory(src)
 add_subdirectory(sample)
+add_subdirectory(tests)
