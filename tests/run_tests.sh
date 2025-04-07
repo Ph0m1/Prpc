@@ -115,5 +115,16 @@ if [ $FAILED -gt 0 ]; then
 else
     echo ""
     echo "🎉 All tests passed!"
+
+# 生成详细测试报告
+echo ""
+echo "📊 生成测试报告..."
+if command -v python3 &> /dev/null; then
+    chmod +x generate_test_report.py
+    python3 generate_test_report.py --build-dir ../build
+    echo "✅ 测试报告已生成: test_report.html"
+else
+    echo "⚠️  Python3 未安装，跳过报告生成"
+fi
     exit 0
 fi 

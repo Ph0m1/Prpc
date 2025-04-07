@@ -69,4 +69,44 @@ add_executable(integration_test test_integration.cc)
 target_link_libraries(integration_test
     prpc_provider
     ${PRPC_LIBS}
-) 
+)
+
+# Provider测试
+add_executable(test_provider test_provider.cc)
+target_link_libraries(test_provider
+    prpc_provider
+    ${PRPC_LIBS}
+)
+
+# Zookeeper测试
+add_executable(test_zookeeper test_zookeeper.cc)
+target_link_libraries(test_zookeeper
+    prpc_provider
+    ${PRPC_LIBS}
+)
+
+# 基准测试（如果有Google Benchmark）
+find_package(benchmark QUIET)
+if(benchmark_FOUND)
+    add_executable(benchmark_test benchmark_test.cc)
+    target_link_libraries(benchmark_test
+        prpc_provider
+        ${PRPC_LIBS}
+        benchmark::benchmark
+    )
+    message(STATUS "Google Benchmark found, benchmark tests enabled")
+else()
+    message(STATUS "Google Benchmark not found, benchmark tests disabled")
+endif()
+
+# 模糊测试（如果使用Clang）
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_executable(fuzz_test fuzz_test.cc)
+    target_compile_options(fuzz_test PRIVATE -fsanitize=fuzzer,address)
+    target_link_options(fuzz_test PRIVATE -fsanitize=fuzzer,address)
+    target_link_libraries(fuzz_test
+        prpc_provider
+        ${PRPC_LIBS}
+    )
+    message(STATUS "Clang compiler detected, fuzzing tests enabled")
+endif() 

@@ -4,7 +4,6 @@
 #include <unistd.h>
 
 #include <cstdlib>
-#include <iostream>
 
 Pconfig Papplication::m_config;
 std::mutex Papplication::m_mutex;
