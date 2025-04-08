@@ -85,6 +85,13 @@ target_link_libraries(test_zookeeper
     ${PRPC_LIBS}
 )
 
+# 对象池测试
+add_executable(test_object_pool test_object_pool.cc)
+target_link_libraries(test_object_pool
+    prpc_provider
+    ${PRPC_LIBS}
+)
+
 # 基准测试（如果有Google Benchmark）
 find_package(benchmark QUIET)
 if(benchmark_FOUND)
