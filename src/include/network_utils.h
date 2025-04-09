@@ -116,7 +116,7 @@ public:
     void setTimeout(int timeout_ms) {
         struct timeval tv;
         tv.tv_sec = timeout_ms / 1000;
-        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        tv.tv_usec = static_cast<__suseconds_t>((timeout_ms % 1000) * 1000);
         setOption(SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
         setOption(SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     }

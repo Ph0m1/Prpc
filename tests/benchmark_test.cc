@@ -83,7 +83,7 @@ public:
         for (int i = 0; i < iterations; ++i) {
             Pconfig config;
             config.LoadConfigFile("benchmark_test.conf");
-            std::string value = config.Load("key500");
+            [[maybe_unused]] std::string value = config.Load("key500");
         }
         
         auto end = std::chrono::high_resolution_clock::now();
@@ -247,7 +247,7 @@ public:
         }
         
         // 生成报告
-        auto report = monitor.generateReport();
+        [[maybe_unused]] auto report = monitor.generateReport();
         std::cout << "Pool monitor report generated successfully" << std::endl;
         
         // 检查健康状态

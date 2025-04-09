@@ -82,14 +82,14 @@ extern "C" int LLVMFuzzerTestOneInputError(const uint8_t *data, size_t size) {
             throw PrpcException(ErrorCode::UNKNOWN_ERROR, input);
         } catch (const PrpcException& e) {
             // 测试错误消息访问
-            std::string msg = e.what();
-            ErrorCode code = e.getErrorCode();
+            [[maybe_unused]] std::string msg = e.what();
+            [[maybe_unused]] ErrorCode code = e.getErrorCode();
         }
         
         // 测试Result类
         auto result = Result<std::string>(ErrorCode::NETWORK_ERROR, input);
         if (!result.isSuccess()) {
-            std::string error_msg = result.getErrorMessage();
+            [[maybe_unused]] std::string error_msg = result.getErrorMessage();
         }
         
     } catch (...) {

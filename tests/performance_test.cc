@@ -306,6 +306,9 @@ public:
                                 (void)e.what();
                             }
                             break;
+                        default:
+                            // 不应该到达这里
+                            break;
                     }
                     
                     operations_completed.fetch_add(1);

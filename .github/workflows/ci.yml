@@ -91,4 +91,4 @@ jobs:
         cd build
         cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
         cd ..
-        clang-tidy src/*.cc -p build/ 
+        clang-tidy src/*.cc tests/*.cc -p build/ 

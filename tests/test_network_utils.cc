@@ -82,14 +82,14 @@ public:
             
             // 测试移动构造
             Socket socket2 = std::move(socket1);
-            assert(!socket1.isValid());
+            assert(!socket1.isValid()); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
             assert(socket2.isValid());
             assert(socket2.get() == fd1);
             
             // 测试移动赋值
             Socket socket3(AF_INET, SOCK_STREAM);
             socket3 = std::move(socket2);
-            assert(!socket2.isValid());
+            assert(!socket2.isValid()); // NOLINT(bugprone-use-after-move,clang-analyzer-cplusplus.Move)
             assert(socket3.isValid());
             assert(socket3.get() == fd1);
             

@@ -53,7 +53,7 @@ public:
         
         // 测试网络错误处理
         try {
-            prpc::network::Socket socket = prpc::network::utils::createTcpClient("invalid.host", 9999);
+            [[maybe_unused]] prpc::network::Socket socket = prpc::network::utils::createTcpClient("invalid.host", 9999);
             assert(false); // 不应该到达这里
         } catch (const prpc::NetworkException& e) {
             assert(e.getErrorCode() == prpc::ErrorCode::NETWORK_ERROR);

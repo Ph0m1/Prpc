@@ -99,7 +99,7 @@ void Pchannel::CallMethod(const google::protobuf::MethodDescriptor *method,
     int timeout_ms = p_controller->GetTimeout();
     struct timeval tv;
     tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    tv.tv_usec = static_cast<__suseconds_t>((timeout_ms % 1000) * 1000);
     setsockopt(clientfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
   }
 

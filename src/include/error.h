@@ -7,11 +7,12 @@
 #include <memory>
 #include <functional>
 #include <cstring>
+#include <cstdint>
 
 namespace prpc {
 
 // 错误码枚举
-enum class ErrorCode {
+enum class ErrorCode : std::uint16_t {
     SUCCESS = 0,
     CONFIG_ERROR = 1000,
     NETWORK_ERROR = 2000,
@@ -100,7 +101,7 @@ public:
     
     // 错误构造函数
     explicit Result(ErrorCode code, std::string message = "")
-        : error_code_(code), error_message_(std::move(message)) {}
+        : value_{}, error_code_(code), error_message_(std::move(message)) {}
     
     // 检查是否成功
     bool isSuccess() const { return error_code_ == ErrorCode::SUCCESS; }
